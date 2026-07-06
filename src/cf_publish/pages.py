@@ -30,6 +30,7 @@ from blake3 import blake3
 API = "https://api.cloudflare.com/client/v4"
 MAX_FILE_SIZE = 25 * 1024 * 1024  # Pages hard limit: 25 MiB per file
 MAX_FILES = 20_000  # Pages hard limit: files per deployment
+SPECIAL_FILES = ("_headers", "_redirects")  # Pages config, attached to the deployment
 BATCH_BYTES = 30 * 1024 * 1024  # raw bytes per upload call (base64 inflates ~1.33x)
 BATCH_FILES = 500
 UPLOAD_CONCURRENCY = 3  # same as wrangler
@@ -190,11 +191,23 @@ class Pages:
         return _ok(_request(self.client, "GET",
                             f"{self.base}/projects/{project}/upload-token"))["jwt"]
 
-    def deploy(self, project: str, manifest: "dict[str, str]", branch: str) -> dict:
+    def deploy(self, project: str, manifest: "dict[str, str]", branch: str,
+               special: "dict[str, bytes] | None" = None) -> dict:
+        """Create the deployment.
+
+        ``special`` holds the contents of root-level ``_headers`` /
+        ``_redirects``. Like wrangler, they are attached to the deployment
+        request as form fields so Pages parses and applies them — uploading
+        them as ordinary assets would make Pages serve them as static files
+        and ignore the rules entirely.
+        """
+        files: dict = {"manifest": (None, json.dumps(manifest))}
+        for name, content in (special or {}).items():
+            files[name] = (name, content)
         return _ok(_request(
             self.client, "POST", f"{self.base}/projects/{project}/deployments",
             data={"branch": branch},
-            files={"manifest": (None, json.dumps(manifest))},
+            files=files,
         ))
 
 
@@ -283,13 +296,26 @@ def deploy(directory: "str | Path", project: str, branch: str = "main",
         raise PagesError(f"not a directory: {root}")
 
     files = collect(root, exclude)
+
+    # Root-level _headers/_redirects are Pages configuration, not assets:
+    # they ride along on the deployment request (see Pages.deploy) instead of
+    # being uploaded — otherwise Pages serves them as static files and the
+    # rules never take effect. Copies in subdirectories stay ordinary assets,
+    # which matches wrangler.
+    special: dict[str, bytes] = {}
+    for name in SPECIAL_FILES:
+        p = files.pop("/" + name, None)
+        if p is not None:
+            special[name] = p.read_bytes()
+
     manifest: dict[str, str] = {}
     by_hash: dict[str, Path] = {}
     for url_path, p in files.items():
         h = file_hash(p.read_bytes(), p.suffix.lstrip("."))
         manifest[url_path] = h
         by_hash[h] = p
-    on_progress(f"{len(files)} files ({len(by_hash)} unique)")
+    on_progress(f"{len(files)} files ({len(by_hash)} unique)"
+                + (f" + {', '.join(sorted(special))}" if special else ""))
 
     pages = Pages(account, token, transport=transport)
     exists = pages.project_exists(project)
@@ -325,7 +351,7 @@ def deploy(directory: "str | Path", project: str, branch: str = "main",
                             duration=time.monotonic() - started, dry_run=True)
 
     uploaded = upload_assets(jwt, by_hash, on_progress, transport=transport)
-    result = pages.deploy(project, manifest, branch)
+    result = pages.deploy(project, manifest, branch, special)
     url = result.get("url", "")
     on_progress(f"deployed: {url or '(no URL in response)'}")
     return DeployResult(url=url, files=len(files), unique=len(by_hash),

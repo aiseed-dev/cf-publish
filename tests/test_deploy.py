@@ -68,7 +68,7 @@ class FakeCloudflare:
             self.upserted = json.loads(request.content)["hashes"]
             return self.ok(None)
         if path == f"{prefix}/projects/{PROJECT}/deployments":
-            self.deployments.append({"branch": "?"})
+            self.deployments.append({"body": request.content})
             return self.ok({"url": f"https://deadbeef.{PROJECT}.pages.dev"})
         raise AssertionError(f"unexpected request: {request.method} {path}")
 
@@ -98,6 +98,26 @@ def test_full_deploy_creates_project_and_uploads(site):
     assert len(cf.uploaded) == 2
     assert sorted(cf.upserted) == sorted(i["key"] for i in cf.uploaded)
     assert len(cf.deployments) == 1
+
+
+def test_special_files_ride_on_the_deployment(site):
+    """Root _headers/_redirects are Pages config: excluded from the asset
+    manifest and attached to the deployment request as form fields
+    (the wrangler behaviour). A copy in a subdirectory stays an asset."""
+    (site / "_headers").write_text("/x\n  X-Test: 1\n")
+    (site / "_redirects").write_text("/old /new 301\n")
+    (site / "css" / "_redirects").write_text("not special here")
+
+    cf = FakeCloudflare()
+    result = deploy(site, PROJECT, transport=cf.transport())
+    assert result.files == 3  # index.html, css/style.css, css/_redirects
+
+    body = cf.deployments[0]["body"]
+    assert b'name="_headers"' in body and b"X-Test" in body
+    assert b'name="_redirects"' in body and b"/old /new 301" in body
+    # マニフェストにはルートの _headers/_redirects が含まれない
+    assert b"/_headers" not in body
+    assert b'"/css/_redirects"' in body
 
 
 def test_cached_files_are_not_reuploaded(site):

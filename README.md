@@ -30,7 +30,9 @@ one HTTP conversation. `cf-publish` implements the same upload protocol in
 - **Concurrent uploads** with retry and exponential backoff on 429/5xx.
 - **Pre-flight validation** of the Pages limits (25 MiB/file, 20,000
   files/deployment) before anything is sent.
-- `_headers`, `_redirects` and other special Pages files pass through as-is.
+- Root-level `_headers` / `_redirects` are attached to the deployment the
+  way wrangler does it, so Pages actually parses and applies the rules
+  (uploading them as plain assets would serve them as static files instead).
 
 ## Usage
 
