@@ -66,10 +66,24 @@ print(result.url, result.uploaded, result.duration)
 - 隠しファイル・隠しディレクトリ（`.` 始まり）は送られない。
 - シンボリックリンクは実体のコピーとして配信される（循環は検知して停止）。
 
+## R2 同期
+
+```bash
+export R2_ACCESS_KEY_ID=...        # R2 の S3 互換 API トークン（Pages トークンとは別）
+export R2_SECRET_ACCESS_KEY=...
+export CLOUDFLARE_ACCOUNT_ID=...
+cf-publish r2 sync ./data バケット名/プレフィックス [--delete] [--dry-run]
+```
+
+S3 互換 API での差分同期。SigV4 は標準ライブラリ実装なので依存は増えていない。
+遠隔 ETag と ローカル MD5 が一致するファイルはスキップ、`--delete` でローカルに
+無い遠隔オブジェクトを削除。単一 PUT のみ（〜5GB、マルチパート未対応）。
+「サイトは Pages、データは R2」が 1 つの CLI で完結する。
+
 ## ロードマップ
 
-- `cf-publish r2 sync` — 25 MiB 超のデータ配布向けに R2 への同期を同じ操作感で
 - デプロイ一覧 / ロールバック
+- R2 マルチパートアップロード（5GB 超）
 
 ## ライセンス
 

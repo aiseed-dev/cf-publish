@@ -90,12 +90,26 @@ The core raises `PagesError` on expected failures and never calls
 - Symlinks are followed and served as copies (Pages has no symlinks);
   cycles are detected and broken.
 
+## R2 sync
+
+```bash
+export R2_ACCESS_KEY_ID=...        # R2 S3-API token (dashboard -> R2 -> Manage API Tokens)
+export R2_SECRET_ACCESS_KEY=...    # NOT the Pages token
+export CLOUDFLARE_ACCOUNT_ID=...
+cf-publish r2 sync ./data my-bucket/some/prefix [--delete] [--dry-run]
+```
+
+Diff-syncs a folder to an R2 bucket over the S3-compatible API — SigV4 is
+implemented with the standard library, so still just two dependencies.
+Unchanged files (remote ETag == local MD5) are skipped; `--delete` removes
+remote objects that no longer exist locally. Single-PUT only, so objects are
+capped at ~5 GB (no multipart yet). Pairs with the Pages command: site on
+Pages, data on R2 (free egress), one CLI.
+
 ## Roadmap
 
-- `cf-publish r2 sync` — push large data files to R2 with the same
-  ergonomics (Pages caps files at 25 MiB; R2 is the natural home for data
-  distribution and has free egress).
 - Deployment list / rollback.
+- R2 multipart uploads (>5 GB objects).
 
 ## License
 

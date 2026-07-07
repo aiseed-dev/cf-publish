@@ -96,3 +96,25 @@ assets 系は公式リファレンス外）。方針:
 - パッケージ名 `cf-publish` で確定してよいか（空きは確認済み）
 - GitHub の置き場所は aiseed-dev org でよいか
 - v0.1 に R2 を入れず Pages 専念でよいか（推奨: 入れない）
+
+## 8. v0.2: `cf-publish r2 sync`（2026-07-07 着手）
+
+`cf-publish r2 sync <dir> <bucket>[/prefix]` — ローカルディレクトリを R2 バケットへ
+差分同期する。Pages の 25MiB 制限を超えるデータ配布（気象 NetCDF・タイル・チャート）
+の受け皿。rclone の置き換えが目的なので機能は sync に絞る。
+
+- **認証**: R2 の S3 互換 API トークン（Pages トークンとは別物）。
+  `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` ＋ `CLOUDFLARE_ACCOUNT_ID` を
+  環境変数か ~/.config/cloudflare/pages.env から読む
+- **SigV4 を標準ライブラリで実装**（hashlib/hmac。追加依存なし。転送は既存の httpx）
+- **差分判定**: ListObjectsV2（ページネーション対応）で遠隔の ETag を取り、
+  ローカル MD5 と比較（R2 の単一 PUT の ETag は MD5）。一致はスキップ
+- **削除**: `--delete` 指定時のみ、ローカルに無い遠隔オブジェクトを削除
+  （予報ランの世代交代に必要。既定は削除しない安全側）
+- **並列 PUT**（3 並列・指数バックオフは Pages 側と共通の _request を再利用）
+- `--dry-run` / `--exclude` / `--quiet` / `--json` は Pages 側と同じ意味
+- **制限**: 単一 PUT のみ（〜5GB）。マルチパートは対象外と README に明記
+- CLI 構成: `cf-publish <dir> --project ...`（従来・後方互換）に加え
+  `cf-publish r2 sync ...` サブコマンド
+- テスト: SigV4 は AWS 公式テストベクタで固定、sync は MockTransport で
+  ListObjectsV2(XML)/PUT/DELETE を模擬

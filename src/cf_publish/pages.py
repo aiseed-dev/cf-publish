@@ -93,14 +93,23 @@ def _excluded(rel: str, patterns: Iterable[str]) -> bool:
     return any(fnmatch.fnmatch(rel, p) or fnmatch.fnmatch(name, p) for p in patterns)
 
 
-def collect(root: Path, exclude: Iterable[str] = ()) -> "dict[str, Path]":
+_PAGES_DEFAULT = object()  # sentinel: resolve the Pages limits at call time
+
+
+def collect(root: Path, exclude: Iterable[str] = (), *,
+            max_file_size=_PAGES_DEFAULT, max_files=_PAGES_DEFAULT) -> "dict[str, Path]":
     """Map URL paths to files under ``root``.
 
     Hidden files and directories are skipped. Symlinks are followed (Pages has
     no notion of links, so they are served as copies); cycles are broken by
     tracking visited real paths. ``exclude`` holds fnmatch patterns tested
-    against both the relative POSIX path and the bare filename.
+    against both the relative POSIX path and the bare filename. The limits
+    default to the Pages hard limits; the R2 sync passes its own.
     """
+    if max_file_size is _PAGES_DEFAULT:
+        max_file_size = MAX_FILE_SIZE
+    if max_files is _PAGES_DEFAULT:
+        max_files = MAX_FILES
     exclude = tuple(exclude)
     files: dict[str, Path] = {}
     seen_dirs: set[str] = set()
@@ -121,14 +130,15 @@ def collect(root: Path, exclude: Iterable[str] = ()) -> "dict[str, Path]":
             rel = p.relative_to(root).as_posix()
             if _excluded(rel, exclude):
                 continue
-            if p.stat().st_size > MAX_FILE_SIZE:
-                raise PagesError(f"{p} exceeds the 25 MiB Pages per-file limit")
+            if p.stat().st_size > max_file_size:
+                raise PagesError(
+                    f"{p} exceeds the {max_file_size // (1024 * 1024)} MiB per-file limit")
             files["/" + rel] = p
     if not files:
         raise PagesError(f"no files to deploy under {root}")
-    if len(files) > MAX_FILES:
+    if max_files is not None and len(files) > max_files:
         raise PagesError(
-            f"{len(files)} files exceed the {MAX_FILES} files-per-deployment Pages limit"
+            f"{len(files)} files exceed the {max_files} files-per-deployment Pages limit"
         )
     return files
 

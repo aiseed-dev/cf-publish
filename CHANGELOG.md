@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 (2026-07-07)
+
+### Added
+
+- **`cf-publish r2 sync DIR BUCKET[/PREFIX]`** — sync a local folder to a
+  Cloudflare R2 bucket over the S3-compatible API. AWS SigV4 implemented with
+  the standard library (no boto3); diffing compares remote ETags against
+  local MD5 so unchanged files are never re-sent; `--delete` removes
+  remote-only objects; `--dry-run` / `--exclude` / `--quiet` / `--json` work
+  like the Pages command. Credentials: R2_ACCESS_KEY_ID /
+  R2_SECRET_ACCESS_KEY / CLOUDFLARE_ACCOUNT_ID. Single-PUT only (~5 GB/object).
+
 ## 0.1.1 (2026-07-06)
 
 ### Fixed

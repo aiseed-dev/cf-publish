@@ -12,6 +12,11 @@ from .pages import ENV_FILE, PagesError, deploy
 
 
 def main(argv: "list[str] | None" = None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Subcommand routing: `cf-publish r2 sync ...`. The bare deploy form
+    # (`cf-publish DIR --project X`) stays as-is for backwards compatibility.
+    if argv[:1] == ["r2"]:
+        return _main_r2(argv[1:])
     ap = argparse.ArgumentParser(
         prog="cf-publish",
         description="Deploy a local folder to Cloudflare Pages via the "
@@ -62,6 +67,50 @@ def main(argv: "list[str] | None" = None) -> None:
     elif args.quiet:
         if result.url:
             print(result.url)
+
+
+def _main_r2(argv: "list[str]") -> None:
+    from .r2 import sync
+
+    ap = argparse.ArgumentParser(
+        prog="cf-publish r2",
+        description="Sync a local folder to a Cloudflare R2 bucket "
+                    "(S3-compatible API, no boto3/rclone needed).",
+        epilog=(
+            "credentials: set R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY "
+            "(dashboard → R2 → Manage R2 API Tokens; NOT the Pages token) "
+            "and CLOUDFLARE_ACCOUNT_ID as environment variables, or put "
+            f"KEY=VALUE lines in {ENV_FILE}."
+        ),
+    )
+    ap.add_argument("command", choices=["sync"])
+    ap.add_argument("directory", help="local folder to sync")
+    ap.add_argument("bucket", metavar="BUCKET[/PREFIX]",
+                    help="destination bucket, optionally with a key prefix")
+    ap.add_argument("--delete", action="store_true",
+                    help="also delete remote objects that no longer exist locally")
+    ap.add_argument("--exclude", action="append", default=[], metavar="PATTERN",
+                    help="fnmatch pattern to skip; repeatable")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="show what would change, transfer nothing")
+    out = ap.add_mutually_exclusive_group()
+    out.add_argument("--quiet", action="store_true",
+                     help="suppress progress output")
+    out.add_argument("--json", action="store_true", dest="as_json",
+                     help="print a JSON result")
+    args = ap.parse_args(argv)
+
+    progress = (lambda msg: None) if args.quiet else (
+        lambda msg: print(msg, file=sys.stderr))
+    try:
+        result = sync(args.directory, args.bucket, delete=args.delete,
+                      exclude=args.exclude, dry_run=args.dry_run,
+                      on_progress=progress)
+    except PagesError as exc:
+        print(f"cf-publish: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if args.as_json:
+        print(json.dumps(dataclasses.asdict(result)))
 
 
 if __name__ == "__main__":

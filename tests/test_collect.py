@@ -44,7 +44,7 @@ def test_exclude_matches_relative_path_and_name(tmp_path):
 def test_oversize_file_rejected(tmp_path, monkeypatch):
     make(tmp_path, "big.bin", b"x" * 100)
     monkeypatch.setattr(pages, "MAX_FILE_SIZE", 99)
-    with pytest.raises(PagesError, match="25 MiB"):
+    with pytest.raises(PagesError, match="per-file limit"):
         collect(tmp_path)
 
 
