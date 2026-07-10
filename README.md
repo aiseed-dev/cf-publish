@@ -108,8 +108,11 @@ Pages, data on R2 (free egress), one CLI.
 
 ## Roadmap
 
-- Deployment list / rollback.
 - R2 multipart uploads (>5 GB objects).
+
+Deployment list / rollback is intentionally out of scope: the Cloudflare
+dashboard ships both ("Rollback to this deployment"), so a CLI duplicate
+adds nothing.
 
 ## License
 

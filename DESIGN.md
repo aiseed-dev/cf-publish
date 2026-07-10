@@ -67,7 +67,9 @@ website リポジトリ側は `tools/cloudflare_pages_deploy.py` を当面残す
   S3 互換 API（SigV4 は hashlib/hmac で書ける。追加依存なし）。
   Pages の 25MiB 制限を超えるデータ配布（気象 NetCDF など）はこちらが受け皿。
   「サイトは Pages、データは R2」を 1 つの CLI で完結させる。
-- デプロイ一覧 / ロールバック（`deployments` API は公式документ済みで安定）。
+- ~~デプロイ一覧 / ロールバック~~ **作らない**（2026-07-09 決定）:
+  Cloudflare ダッシュボードに標準装備（Rollback to this deployment）されて
+  おり、CLI に重複実装する価値がない。本キットの範囲は「上げる」まで。
 
 ## 5. リスクと退路
 
