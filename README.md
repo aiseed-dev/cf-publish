@@ -13,6 +13,13 @@ cf-publish ./public --project my-site
 That's it. The contents of `./public` become the site. The project is created
 on first deploy if it doesn't exist.
 
+**What it's for**: publish a static site you built with Python (a blog, a
+company site, docs) to the world without Node.js. The Pages free tier is
+plenty for personal and small-business sites, global CDN and HTTPS included.
+For large file distribution, pair it with R2 (free egress) via
+`cf-publish r2 sync` — **a site that runs at $0/month**, hosting and
+bandwidth included.
+
 日本語の説明は [README.ja.md](https://github.com/aiseed-dev/cf-publish/blob/main/README.ja.md) にあります。
 
 ## Why
