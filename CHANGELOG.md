@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 (2026-07-09)
+
+### Fixed
+
+- README: link to README.ja.md is now an absolute GitHub URL so it resolves
+  on the PyPI project page (relative links only work on GitHub).
+
 ## 0.2.0 (2026-07-07)
 
 ### Added

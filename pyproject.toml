@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cf-publish"
-version = "0.2.0"
+version = "0.2.1"
 description = "Deploy a local folder to Cloudflare Pages via the Direct Upload API — no wrangler, no npm."
 readme = "README.md"
 requires-python = ">=3.9"
