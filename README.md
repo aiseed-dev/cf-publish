@@ -13,7 +13,7 @@ cf-publish ./public --project my-site
 That's it. The contents of `./public` become the site. The project is created
 on first deploy if it doesn't exist.
 
-日本語の説明は [README.ja.md](README.ja.md) にあります。
+日本語の説明は [README.ja.md](https://github.com/aiseed-dev/cf-publish/blob/main/README.ja.md) にあります。
 
 ## Why
 
