@@ -253,31 +253,31 @@ def upload_assets(token: str, by_hash: "dict[str, Path]",
                   on_progress: ProgressFn = _noop,
                   transport: Optional[httpx.BaseTransport] = None) -> int:
     """Upload contents missing from the Pages cache. Returns the upload count."""
-    client = httpx.Client(
+    with httpx.Client(
         timeout=300.0,
         headers={"Authorization": f"Bearer {token}", "User-Agent": _user_agent()},
         transport=transport,
-    )
-    missing = check_missing(client, by_hash)
-    on_progress(f"uploading {len(missing)} / {len(by_hash)} files "
-                f"(the rest are already cached)")
+    ) as client:
+        missing = check_missing(client, by_hash)
+        on_progress(f"uploading {len(missing)} / {len(by_hash)} files "
+                    f"(the rest are already cached)")
 
-    batches = _build_batches(missing, by_hash)
-    lock = threading.Lock()
+        batches = _build_batches(missing, by_hash)
+        lock = threading.Lock()
 
-    def send(batch: "list[dict]") -> None:
-        _ok(_request(client, "POST", f"{API}/pages/assets/upload", json=batch))
-        with lock:
-            on_progress(f"  sent {len(batch)} files")
+        def send(batch: "list[dict]") -> None:
+            _ok(_request(client, "POST", f"{API}/pages/assets/upload", json=batch))
+            with lock:
+                on_progress(f"  sent {len(batch)} files")
 
-    with ThreadPoolExecutor(max_workers=UPLOAD_CONCURRENCY) as pool:
-        for future in [pool.submit(send, b) for b in batches]:
-            future.result()  # re-raise the first failure
+        with ThreadPoolExecutor(max_workers=UPLOAD_CONCURRENCY) as pool:
+            for future in [pool.submit(send, b) for b in batches]:
+                future.result()  # re-raise the first failure
 
-    # Tell Pages the cached hashes are still in use (same as wrangler)
-    _ok(_request(client, "POST", f"{API}/pages/assets/upsert-hashes",
-                 json={"hashes": list(by_hash)}))
-    return len(missing)
+        # Tell Pages the cached hashes are still in use (same as wrangler)
+        _ok(_request(client, "POST", f"{API}/pages/assets/upsert-hashes",
+                     json={"hashes": list(by_hash)}))
+        return len(missing)
 
 
 def deploy(directory: "str | Path", project: str, branch: str = "main",
@@ -345,13 +345,13 @@ def deploy(directory: "str | Path", project: str, branch: str = "main",
     if dry_run:
         uploaded = 0
         if jwt is not None:
-            client = httpx.Client(
+            with httpx.Client(
                 timeout=120.0,
                 headers={"Authorization": f"Bearer {jwt}",
                          "User-Agent": _user_agent()},
                 transport=transport,
-            )
-            missing = check_missing(client, by_hash)
+            ) as client:
+                missing = check_missing(client, by_hash)
             uploaded = len(missing)
             for h in missing:
                 on_progress(f"  would upload {by_hash[h].relative_to(root)}")

@@ -54,6 +54,19 @@ def _hmac(key: bytes, msg: str) -> bytes:
     return hmac.new(key, msg.encode(), hashlib.sha256).digest()
 
 
+def _canonical_query(query: "dict[str, str]") -> str:
+    """SigV4 canonical query: RFC3986 percent-encoding, sorted by key.
+
+    The request must send *these exact bytes*: letting httpx re-encode the
+    params dict is not byte-identical (urlencode turns a space into ``+``
+    where SigV4 canonicalisation requires ``%20``), and any divergence means
+    the server computes a different canonical request → signature mismatch
+    (403) — e.g. for a ``--prefix`` containing a space.
+    """
+    return "&".join(
+        f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(query.items()))
+
+
 def sign_v4(method: str, host: str, path: str, query: "dict[str, str]",
             headers: "dict[str, str]", payload_hash: str,
             access_key: str, secret: str, *, region: str = "auto",
@@ -74,8 +87,7 @@ def sign_v4(method: str, host: str, path: str, query: "dict[str, str]",
     canonical_headers = "".join(
         f"{n.lower()}:{all_headers[n].strip()}\n" for n in signed_names)
     signed_header_list = ";".join(n.lower() for n in signed_names)
-    canonical_query = "&".join(
-        f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in sorted(query.items()))
+    canonical_query = _canonical_query(query)
     canonical = (f"{method}\n{path}\n{canonical_query}\n"
                  f"{canonical_headers}\n{signed_header_list}\n{payload_hash}")
 
@@ -112,8 +124,12 @@ class R2Client:
         payload_hash = hashlib.sha256(body).hexdigest() if body else _EMPTY_SHA256
         signed = sign_v4(method, self.host, path, query, headers, payload_hash,
                          self.access_key, self.secret)
-        resp = _request(self.client, method, path,
-                        params=query, content=body, headers=signed)
+        # 署名と同じバイト列を送る: params= に渡すと httpx が独自に再符号化
+        # して署名とずれる(空白が %20 でなく + になる等)ため、正規化済みの
+        # クエリ文字列をそのままURLに載せる(httpxは既存の%エスケープを保持)。
+        url = f"{path}?{_canonical_query(query)}" if query else path
+        resp = _request(self.client, method, url,
+                        content=body, headers=signed)
         if resp.status_code >= 400:
             raise PagesError(
                 f"R2 API error HTTP {resp.status_code}: {method} {path}\n"

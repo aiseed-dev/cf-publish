@@ -120,3 +120,42 @@ def test_missing_r2_credentials(tree, monkeypatch, tmp_path):
     monkeypatch.setattr(pages, "ENV_FILE", tmp_path / "absent.env")
     with pytest.raises(PagesError, match="R2_ACCESS_KEY_ID"):
         sync(tree, "data")
+
+
+def _server_side_verify(request: httpx.Request) -> None:
+    """受信したバイト列から、サーバがやるのと同じ手順で署名を再計算して照合。"""
+    from urllib.parse import parse_qsl
+    raw = request.url.raw_path.decode()
+    path, _, qs = raw.partition("?")
+    q = dict(parse_qsl(qs, keep_blank_values=True))
+    extra = {}
+    if request.method == "PUT" and "content-type" in request.headers:
+        extra["content-type"] = request.headers["content-type"]
+    payload = hashlib.sha256(request.content).hexdigest()
+    expected = sign_v4(request.method, request.url.host, path, q, extra,
+                       payload, "rk", "rs",
+                       amz_date=request.headers["x-amz-date"])
+    assert request.headers["Authorization"] == expected["Authorization"], raw
+
+
+def test_query_and_path_bytes_match_signature(tree):
+    """送信バイト列が署名した正規化形と一致する（空白入りprefixの回帰）。
+
+    以前は params= 経由で httpx が再符号化しており、空白が + になって
+    署名（%20）とずれ、RFC3986どおりに検証するサーバでは403になり得た。
+    """
+    calls: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        _server_side_verify(request)
+        calls.append(request.url.raw_path.decode())
+        if request.method == "GET":
+            return httpx.Response(200, text=LIST_XML.format(contents=""))
+        return httpx.Response(200)
+
+    sync(tree, "data/a b", transport=httpx.MockTransport(handle))
+    listing = next(c for c in calls if "?" in c)
+    assert "prefix=a%20b%2F" in listing
+    assert "+" not in listing.split("?", 1)[1]
+    # PUT のパスも空白が %20 のまま(署名と同一バイト)で送られている
+    assert any(c.startswith("/data/a%20b/") for c in calls if "?" not in c)

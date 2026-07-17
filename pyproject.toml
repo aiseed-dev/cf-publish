@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cf-publish"
-version = "0.2.1"
+dynamic = ["version"]
 description = "Deploy a local folder to Cloudflare Pages via the Direct Upload API — no wrangler, no npm."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -41,3 +41,9 @@ dev = ["pytest>=8"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cf_publish"]
+
+# バージョンの実体は __init__.py の __version__ だけ（pywashi/pyasciidocと
+# 同じ方式）。pyproject 側と二重定義だと食い違う（0.2.1 リリース時に
+# __init__.py が 0.2.0 のままで --version が誤表示になった）。
+[tool.hatch.version]
+path = "src/cf_publish/__init__.py"
